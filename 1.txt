@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+# Practical 1 - Edit Distance (Levenshtein Distance)
+
+def edit_distance(s1, s2):
+    m, n = len(s1), len(s2)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m + 1): dp[i][0] = i
+    for j in range(n + 1): dp[0][j] = j
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            cost = 0 if s1[i-1] == s2[j-1] else 1
+            dp[i][j] = min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + cost)
+    return dp[m][n]
+
+pairs = [
+    ("kitten",    "sitting"),
+    ("sunday",    "saturday"),
+    ("intention", "execution"),
+    ("data",      "date"),
+    ("python",    "pycharm"),
+]
+
+print(f"{'String 1':<16}{'String 2':<16}{'Distance':>8}")
+print("-" * 42)
+for s1, s2 in pairs:
+    print(f"{s1:<16}{s2:<16}{edit_distance(s1, s2):>8}")
+
+
+    #!/usr/bin/env python3
+# Practical 2 - Document Similarity (TF-IDF + Cosine)
+
+import math, re
+from collections import Counter
+
+def tokenize(text): return re.findall(r'[a-z]+', text.lower())
+def tf(tokens): c = Counter(tokens); return {w: c[w]/len(tokens) for w in c}
+def idf(docs):
+    N = len(docs); vocab = set(w for d in docs for w in d)
+    return {w: math.log(N / sum(1 for d in docs if w in d)) for w in vocab}
+def tfidf(tokens, imap): t = tf(tokens); return {w: t.get(w,0)*imap[w] for w in imap}
+def cosine(v1, v2):
+    keys = set(v1)|set(v2)
+    dot = sum(v1.get(k,0)*v2.get(k,0) for k in keys)
+    m1 = math.sqrt(sum(x**2 for x in v1.values()))
+    m2 = math.sqrt(sum(x**2 for x in v2.values()))
+    return dot/(m1*m2) if m1 and m2 else 0.0
+
+docs = {
+    "Doc1": "The quick brown fox jumps over the lazy dog near the river bank",
+    "Doc2": "The dog was sleeping near the river while the fox jumped over it",
+    "Doc3": "Machine learning and artificial intelligence drive modern technology",
+}
+
+tok  = {k: tokenize(v) for k, v in docs.items()}
+imap = idf(list(tok.values()))
+vec  = {k: tfidf(tok[k], imap) for k in tok}
+names = list(docs.keys())
+
+print(f"{'Pair':<16} Similarity")
+print("-" * 30)
+for i, a in enumerate(names):
+    for b in names[i+1:]:
+        print(f"{a} vs {b}     {cosine(vec[a], vec[b]):.4f}")
+#!/usr/bin/env python3
+# Practical 3 - Stop Word Removal
+
+import re
+
+STOP_WORDS = set(
+    "a about above after again all also although am an and any are as at be because "
+    "been before being below between both but by can cannot could did do does doing "
+    "down during each few for from further had has have having he her here him his "
+    "how i if in into is it its itself me more most my no nor not of off on once only "
+    "or other our out over own same she should so some such than that the their them "
+    "then there these they this those through to too under until up very was we were "
+    "what when where which while who why will with would you your".split()
+)
+
+def remove_stopwords(text):
+    return [t for t in re.findall(r'[a-z]+', text.lower()) if t not in STOP_WORDS]
+
+samples = [
+    "The quick brown fox jumps over the lazy dog",
+    "Information retrieval is the activity of obtaining relevant information",
+    "Data Scientists work on large datasets to extract useful insights",
+]
+
+for text in samples:
+    print(f"Input : {text}")
+    print(f"Output: {' '.join(remove_stopwords(text))}")
+    print()
+#!/usr/bin/env python3
+# Practical 4 - TF-IDF Calculation
+
+import math, re
+from collections import Counter
+
+def tokenize(text): return re.findall(r'[a-z]+', text.lower())
+def tf(tokens): c = Counter(tokens); return {w: c[w]/len(tokens) for w in c}
+def idf(docs):
+    N = len(docs); vocab = set(w for d in docs for w in d)
+    return {w: math.log(N / sum(1 for d in docs if w in d)) for w in vocab}
+
+DOCS = {
+    "Doc1": "Ben studies about computers in Computer Lab",
+    "Doc2": "Steve teaches at Brown University",
+    "Doc3": "Data Scientists work on large datasets",
+}
+QUERY = "Data Scientists"
+
+tok     = {k: tokenize(v) for k, v in DOCS.items()}
+idf_map = idf(list(tok.values()))
+tf_map  = {k: tf(v) for k, v in tok.items()}
+q_terms = tokenize(QUERY)
+
+print(f"Query: {QUERY}\n")
+
+for name, tokens in tok.items():
+    matched = [t for t in q_terms if t in tokens]
+    print(f"  {name}: {'MATCH ' + str(matched) if matched else 'NO MATCH'}")
+
+print(f"\n{'Term':<14} {'Doc':<8} {'TF':>8} {'IDF':>10} {'TF-IDF':>10}")
+print("-" * 50)
+for term in q_terms:
+    for name in DOCS:
+        t = tf_map[name].get(term, 0)
+        i = idf_map.get(term, 0)
+        print(f"{term:<14} {name:<8} {t:>8.4f} {i:>10.4f} {t*i:>10.4f}")
+#!/usr/bin/env python3
+# Practical 5 - Cosine Similarity Between Documents
+
+import math, re
+from collections import Counter
+
+def tokenize(text): return re.findall(r'[a-z]+', text.lower())
+def tf(tokens): c = Counter(tokens); return {w: c[w]/len(tokens) for w in c}
+def idf(docs):
+    N = len(docs); vocab = set(w for d in docs for w in d)
+    return {w: math.log(N / sum(1 for d in docs if w in d)) for w in vocab}
+def tfidf(tokens, imap): t = tf(tokens); return {w: t.get(w,0)*imap[w] for w in imap}
+def cosine(v1, v2):
+    keys = set(v1)|set(v2)
+    dot = sum(v1.get(k,0)*v2.get(k,0) for k in keys)
+    m1 = math.sqrt(sum(x**2 for x in v1.values()))
+    m2 = math.sqrt(sum(x**2 for x in v2.values()))
+    return dot/(m1*m2) if m1 and m2 else 0.0
+
+DOCS = {
+    "Doc1": "Ben studies about computers in Computer Lab",
+    "Doc2": "Steve teaches at Brown University",
+    "Doc3": "Data Scientists work on large datasets",
+}
+
+tok  = {k: tokenize(v) for k, v in DOCS.items()}
+imap = idf(list(tok.values()))
+vec  = {k: tfidf(tok[k], imap) for k in tok}
+names = list(DOCS.keys())
+
+print(f"{'Pair':<16} Similarity")
+print("-" * 30)
+for i, a in enumerate(names):
+    for b in names[i+1:]:
+        print(f"{a} vs {b}     {cosine(vec[a], vec[b]):.4f}")
+#!/usr/bin/env python3
+# Practical 6 - Color Features of an Image
+
+import numpy as np
+
+np.random.seed(42)
+img = np.random.randint(0, 256, (32, 32, 3), dtype=np.uint8)
+print("Image: 32x32 RGB  seed=42\n")
+
+# A. Color Moments
+print(f"{'Channel':<8} {'Mean':>8} {'Std':>8} {'Skewness':>12}")
+print("-" * 42)
+for i, ch in enumerate(["Red", "Green", "Blue"]):
+    d = img[:, :, i].astype(float).ravel()
+    mu, sigma = float(np.mean(d)), float(np.std(d))
+    skew = float(np.mean(((d - mu) / (sigma + 1e-9)) ** 3))
+    print(f"{ch:<8} {mu:>8.2f} {sigma:>8.2f} {skew:>12.4f}")
+
+# B. Color Histogram (8 bins)
+print("\nHistogram (8 bins):")
+for i, ch in enumerate(["Red", "Green", "Blue"]):
+    hist, _ = np.histogram(img[:, :, i], bins=8, range=(0, 256))
+    print(f"  {ch}: {hist.tolist()}")
+
+# C. Color Coherence Vector
+print("\nCCV (8 bins, threshold=10):")
+for i, ch in enumerate(["Red", "Green", "Blue"]):
+    q = (img[:, :, i] // 32).astype(int)
+    coh, inc = [0]*8, [0]*8
+    for row in q:
+        j = 0
+        while j < len(row):
+            c, k = row[j], j
+            while k < len(row) and row[k] == c: k += 1
+            (coh if k-j >= 10 else inc)[c] += k - j
+            j = k
+    print(f"  {ch} coherent  : {coh}")
+    print(f"  {ch} incoherent: {inc}")
+
+# D. Color Correlogram (Red, 4 bins, d=1,2,3)
+print("\nCorrelogram (Red, 4 bins):")
+q = (img[:, :, 0] // 64).astype(int)
+h, w = q.shape
+print(f"  {'Bin':<10} {'d=1':>8} {'d=2':>8} {'d=3':>8}")
+print("  " + "-" * 30)
+for b in range(4):
+    row = f"  [{b*64}-{b*64+63}]  "
+    for d in [1, 2, 3]:
+        cnt, tot = 0, 0
+        for r in range(h):
+            for c in range(w):
+                if q[r, c] == b:
+                    tot += 1
+                    for dr, dc in [(0,d),(d,0),(0,-d),(-d,0)]:
+                        nr, nc = r+dr, c+dc
+                        if 0 <= nr < h and 0 <= nc < w and q[nr, nc] == b:
+                            cnt += 1
+        row += f"{cnt/(tot*4+1e-9):>8.4f}"
+    print(row)
+#!/usr/bin/env python3
+# Practical 7 - Image Similarity: Distance Measures
+
+import math
+import numpy as np
+
+def hist_feature(img, bins=16):
+    h = []
+    for ch in range(3):
+        hist, _ = np.histogram(img[:, :, ch], bins=bins, range=(0, 256))
+        h.extend(hist.tolist())
+    v = np.array(h, dtype=np.float64)
+    return v / (v.sum() + 1e-9)
+
+np.random.seed(10); img1 = np.random.randint(0, 256, (32,32,3)).astype(np.float64)
+np.random.seed(20); img2 = np.random.randint(0, 256, (32,32,3)).astype(np.float64)
+f1, f2 = hist_feature(img1), hist_feature(img2)
+
+# Minkowski
+mink1 = float(np.sum(np.abs(f1 - f2)))
+mink2 = float(np.sqrt(np.sum((f1 - f2) ** 2)))
+
+# Mahalanobis
+var  = np.var(np.vstack([f1, f2]), axis=0) + 1e-9
+maha = float(np.sqrt(np.sum((f1 - f2) ** 2 / var)))
+
+# Canberra
+canberra = float(np.sum(np.abs(f1 - f2) / (np.abs(f1) + np.abs(f2) + 1e-9)))
+
+# Earth Mover's Distance
+emd = sum(float(np.sum(np.abs(np.cumsum(f1[c*16:(c+1)*16]) - np.cumsum(f2[c*16:(c+1)*16])))) for c in range(3))
+
+# Quadratic Form (Red channel)
+bins, sigma = 16, 0.5
+Q  = np.array([[math.exp(-((i-j)**2)/(2*sigma**2)) for j in range(bins)] for i in range(bins)])
+dv = f1[:bins] - f2[:bins]
+qfd = float(math.sqrt(abs(float(dv @ Q @ dv))))
+
+print(f"{'Measure':<28} {'Distance':>12}")
+print("-" * 42)
+print(f"{'Minkowski p=1 (Manhattan)':<28} {mink1:>12.6f}")
+print(f"{'Minkowski p=2 (Euclidean)':<28} {mink2:>12.6f}")
+print(f"{'Mahalanobis':<28} {maha:>12.6f}")
+print(f"{'Canberra':<28} {canberra:>12.6f}")
+print(f"{'Earth Movers Distance':<28} {emd:>12.6f}")
+print(f"{'Quadratic Form':<28} {qfd:>12.6f}")
+#!/usr/bin/env python3
+# Practical 8 - Precision, Recall, F-measure, Average Precision, ANMRR
+
+TP, TN, FP, FN = 10, 60, 22, 8
+
+precision   = TP / (TP + FP)
+recall      = TP / (TP + FN)
+f_measure   = 2 * precision * recall / (precision + recall)
+accuracy    = (TP + TN) / (TP + TN + FP + FN)
+specificity = TN / (TN + FP)
+
+print(f"TP={TP}  TN={TN}  FP={FP}  FN={FN}\n")
+print(f"Precision   = {TP}/{TP+FP} = {precision:.4f}")
+print(f"Recall      = {TP}/{TP+FN} = {recall:.4f}")
+print(f"F-measure   = {f_measure:.4f}")
+print(f"Accuracy    = {accuracy:.4f}")
+print(f"Specificity = {specificity:.4f}")
+
+# Average Precision
+ranked = [1,0,1,1,0,0,1,0,0,1,0,1,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0]
+rel, pvals = 0, []
+for k, r in enumerate(ranked, 1):
+    if r:
+        rel += 1
+        pvals.append(rel / k)
+AP = sum(pvals) / sum(ranked)
+print(f"\nAP = {sum(pvals):.4f} / {sum(ranked)} = {AP:.4f}")
+
+print(f"\n{'Recall':>8} {'Precision':>10}")
+print("-" * 22)
+rel = 0
+for k, r in enumerate(ranked, 1):
+    if r:
+        rel += 1
+        print(f"{rel/sum(ranked):>8.4f} {rel/k:>10.4f}")
+
+# ANMRR
+def nmrr(GTN, ranks):
+    K = min(4 * GTN, 32)
+    adj = [r if r <= K else K+1 for r in ranks]
+    ARR = sum(adj) / GTN
+    return max(0.0, min(1.0, (ARR - 0.5*(1+GTN)) / (K+1 - 0.5*(1+GTN)))), ARR, K
+
+queries = [("Query 1", 5, [1,3,5,9,14]), ("Query 2", 3, [2,4,11]), ("Query 3", 4, [1,2,6,20])]
+print(f"\n{'Query':<10} {'GTN':>4} {'K':>4} {'ARR':>8} {'NMRR':>8}")
+print("-" * 38)
+scores = []
+for name, gtn, ranks in queries:
+    score, ARR, K = nmrr(gtn, ranks)
+    scores.append(score)
+    print(f"{name:<10} {gtn:>4} {K:>4} {ARR:>8.4f} {score:>8.4f}")
+print(f"\nANMRR = {sum(scores)/len(scores):.4f}")
+
