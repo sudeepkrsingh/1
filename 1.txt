@@ -1,3 +1,17 @@
+import urllib.request, json
+
+API_KEY = ""
+prompt = f"What is os?"
+body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
+url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key={API_KEY}"
+req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(req) as res:
+    data = json.loads(res.read())
+    print(data["candidates"][0]["content"]["parts"][0]["text"])
+
+
+
+
 #!/usr/bin/env python3
 # Practical 1 - Edit Distance (Levenshtein Distance)
 
