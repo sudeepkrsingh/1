@@ -360,3 +360,98 @@ for name, gtn, ranks in queries:
     print(f"{name:<10} {gtn:>4} {K:>4} {ARR:>8.4f} {score:>8.4f}")
 print(f"\nANMRR = {sum(scores)/len(scores):.4f}")
 
+
+practical 6 with real image above all are mockups
+#!/usr/bin/env python3
+# Practical 6 - Color Features of an Image (accepts real images)
+
+import sys
+import argparse
+import numpy as np
+
+try:
+    from PIL import Image
+except Exception:
+    Image = None
+
+def parse_args():
+    p = argparse.ArgumentParser(description='Color features (moments, histogram, CCV, correlogram)')
+    p.add_argument('image', nargs='?', help='Path to image file (optional). If omitted, a random image is used.')
+    p.add_argument('--size', type=int, default=32, help='Resize to SIZE x SIZE (default 32)')
+    p.add_argument('--ccv-threshold', type=int, default=10, help='Run-length threshold for CCV')
+    return p.parse_args()
+
+args = parse_args()
+
+if args.image:
+    if Image is None:
+        print('Pillow not installed. Install with: pip install Pillow')
+        sys.exit(1)
+    img_pil = Image.open(args.image).convert('RGB')
+    img_pil = img_pil.resize((args.size, args.size))
+    img = np.array(img_pil, dtype=np.uint8)
+else:
+    np.random.seed(42)
+    img = np.random.randint(0, 256, (args.size, args.size, 3), dtype=np.uint8)
+
+print(f"Image: {img.shape[1]}x{img.shape[0]} RGB  source={'user' if args.image else 'random'}\n")
+
+# A. Color Moments
+print(f"{'Channel':<8} {'Mean':>8} {'Std':>8} {'Skewness':>12}")
+print("-" * 42)
+for i, ch in enumerate(["Red", "Green", "Blue"]):
+    d = img[:, :, i].astype(float).ravel()
+    mu, sigma = float(np.mean(d)), float(np.std(d))
+    skew = float(np.mean(((d - mu) / (sigma + 1e-9)) ** 3))
+    print(f"{ch:<8} {mu:>8.2f} {sigma:>8.2f} {skew:>12.4f}")
+
+# B. Color Histogram (8 bins)
+print("\nHistogram (8 bins):")
+for i, ch in enumerate(["Red", "Green", "Blue"]):
+    hist, _ = np.histogram(img[:, :, i], bins=8, range=(0, 256))
+    print(f"  {ch}: {hist.tolist()}")
+
+# C. Color Coherence Vector
+threshold = args.ccv_threshold
+print(f"\nCCV (8 bins, threshold={threshold}):")
+for i, ch in enumerate(["Red", "Green", "Blue"]):
+    q = (img[:, :, i] // 32).astype(int)
+    coh, inc = [0]*8, [0]*8
+    # simple run-length along rows as a proxy for coherence
+    for row in q:
+        j = 0
+        while j < len(row):
+            c = row[j]
+            k = j + 1
+            while k < len(row) and row[k] == c:
+                k += 1
+            run_length = k - j
+            if run_length >= threshold:
+                coh[c] += run_length
+            else:
+                inc[c] += run_length
+            j = k
+    print(f"  {ch} coherent  : {coh}")
+    print(f"  {ch} incoherent: {inc}")
+
+# D. Color Correlogram (Red, 4 bins, d=1,2,3)
+print("\nCorrelogram (Red, 4 bins):")
+q = (img[:, :, 0] // 64).astype(int)
+h, w = q.shape
+print(f"  {'Bin':<10} {'d=1':>8} {'d=2':>8} {'d=3':>8}")
+print("  " + "-" * 30)
+for b in range(4):
+    row = f"  [{b*64}-{b*64+63}]  "
+    for d in [1, 2, 3]:
+        cnt, tot = 0, 0
+        for r in range(h):
+            for c in range(w):
+                if q[r, c] == b:
+                    tot += 1
+                    for dr, dc in [(0,d),(d,0),(0,-d),(-d,0)]:
+                        nr, nc = r+dr, c+dc
+                        if 0 <= nr < h and 0 <= nc < w and q[nr, nc] == b:
+                            cnt += 1
+        row += f"{cnt/(tot*4+1e-9):>8.4f}"
+    print(row)
+
