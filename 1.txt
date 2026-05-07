@@ -19,261 +19,437 @@ gemini what is genai?
 
 AIzaSyA4SBcN8ys8eci8OQFSh2jVHJWWZN5STbo
 
+#!/usr/bin/env python3
+"""
+NLP Practical File  –  All 10 Practicals
+Subject  : Natural Language Processing
+Faculty  : Dr. Uma Ojha
+"""
 
+import sys, subprocess, re, math, string, random
+from collections import Counter, defaultdict
+import warnings; warnings.filterwarnings('ignore')
 
-# Practical 2: Password Cracking (MD5 Dictionary & Brute-force)
-import hashlib, itertools, string
+def install(p):
+    subprocess.run([sys.executable,'-m','pip','install',p,'-q'], capture_output=True)
 
-def md5(p): return hashlib.md5(p.encode()).hexdigest()
+for p in ['nltk','scikit-learn','numpy']:
+    install(p)
 
-def dict_attack(target, wordlist):
-    for w in wordlist:
-        if md5(w) == target: return w
-    return None
+import nltk, numpy as np
+for c in ['punkt_tab','punkt','stopwords','wordnet','omw-1.4',
+          'averaged_perceptron_tagger_eng','averaged_perceptron_tagger',
+          'maxent_ne_chunker','words','movie_reviews']:
+    try: nltk.download(c, quiet=True)
+    except: pass
 
-def brute_force(target, charset=string.ascii_lowercase, max_len=4):
-    for length in range(1, max_len+1):
-        for combo in itertools.product(charset, repeat=length):
-            w = "".join(combo)
-            if md5(w) == target: return w
-    return None
+from nltk.tokenize import word_tokenize, sent_tokenize
+from nltk.corpus   import stopwords, movie_reviews
+from nltk.stem     import PorterStemmer, WordNetLemmatizer
+from nltk          import pos_tag, ne_chunk
+from nltk.tree     import Tree
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.naive_bayes  import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm          import LinearSVC
+from sklearn.pipeline     import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
 
-def main():
-    print("=== P2: Password Cracking ===")
-    passwords = ["password", "admin", "hello", "abc"]
-    wordlist = ["123456", "password", "admin", "hello", "letmein"]
-    for p in passwords:
-        h = md5(p)
-        found = dict_attack(h, wordlist)
-        print(f"  MD5({p!r}) = {h[:16]}...  Dict: {'FOUND: '+found if found else 'not found'}")
-    # Brute-force short password
-    target = md5("ab")
-    print(f"\n  Brute-force 'ab': {brute_force(target)}")
+SEP = "="*64
 
-if __name__ == "__main__": main()
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 1 : Text Pre-processing
+# ─────────────────────────────────────────────────────────────────
+print(SEP); print("PRACTICAL 1 : Text Pre-processing"); print(SEP)
 
+text = ("Natural Language Processing (NLP) is a fascinating sub-field of "
+        "Artificial Intelligence (AI). NLP enables computers to understand, "
+        "interpret, and manipulate human language. It is widely used in machine "
+        "translation, sentiment analysis, chatbots, and information retrieval!")
 
-# Practical 5: Caesar Cipher
-def encrypt(text, shift):
-    return "".join(chr((ord(c)-ord("A")+shift)%26+ord("A")) if c.isalpha() else c for c in text.upper())
+print("Original Text:\n", text, "\n")
 
-def decrypt(text, shift): return encrypt(text, -shift)
+sents  = sent_tokenize(text)
+tokens = word_tokenize(text)
+lower  = [t.lower() for t in tokens]
+no_p   = [t for t in lower if t.isalpha()]
+sw     = set(stopwords.words('english'))
+filt   = [t for t in no_p if t not in sw]
+ps     = PorterStemmer(); lem = WordNetLemmatizer()
+stemmed   = [ps.stem(w)           for w in filt]
+lemmatized= [lem.lemmatize(w,'v') for w in filt]
 
-def main():
-    print("=== P5: Caesar Cipher ===")
-    pt, shift = "Hello World", 3
-    ct = encrypt(pt, shift)
-    dt = decrypt(ct, shift)
-    print(f"  Plaintext : {pt}")
-    print(f"  Shift     : {shift}")
-    print(f"  Encrypted : {ct}")
-    print(f"  Decrypted : {dt}")
-    print(f"  Result    : {'PASS' if dt.replace(' ','') == pt.upper().replace(' ','') else 'FAIL'}")
-    print("\n  Brute-force:")
-    for s in range(1, 26): print(f"    Shift {s:2d}: {decrypt(ct, s)}")
+print(f"[1] Sentence Tokens  ({len(sents)})  :", sents)
+print(f"[2] Word Tokens      ({len(tokens)}) :", tokens[:12],"...")
+print(f"[3] Lowercase        ({len(lower)})  :", lower[:12],"...")
+print(f"[4] No Punctuation   ({len(no_p)})   :", no_p[:12],"...")
+print(f"[5] Stop-Words Removed ({len(filt)}, removed {len(no_p)-len(filt)}) :", filt)
+print(f"[6] Stemming         :", stemmed)
+print(f"[7] Lemmatization    :", lemmatized)
 
-if __name__ == "__main__": main()
-# Practical 6: Monoalphabetic & Vigenere Polyalphabetic Ciphers
-import random, string
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 2 : Regex Extraction
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 2 : Regex Patterns – Extraction"); print(SEP)
 
-def mono_encrypt(text, key_map): return "".join(key_map.get(c, c) for c in text.upper())
-def mono_decrypt(text, key_map):
-    rev = {v:k for k,v in key_map.items()}; return "".join(rev.get(c,c) for c in text)
+sample = """
+Reach us at: john.doe@gmail.com, jane_smith@university.edu, admin@company.org
+Follow: #MachineLearning #NLP #ArtificialIntelligence #Python3
+Events: 25-04-2024, 01/12/2023, 2024-03-15
+Call: +91-9876543210, (022) 4567-8901, 1-800-555-0100
+Twitter: @john_doe and @jane_smith posted updates today.
+"""
 
-def vigenere(text, key, decrypt=False):
-    result, ki = [], 0
-    for c in text.upper():
-        if c.isalpha():
-            shift = ord(key[ki % len(key)]) - ord("A")
-            if decrypt: shift = -shift
-            result.append(chr((ord(c)-ord("A")+shift)%26+ord("A"))); ki += 1
-        else: result.append(c)
-    return "".join(result)
+print("Input Text:", sample)
 
-def main():
-    print("=== P6: Monoalphabetic & Polyalphabetic Ciphers ===")
-    alpha = list(string.ascii_uppercase)
-    shuffled = alpha[:]; random.shuffle(shuffled)
-    key_map = dict(zip(alpha, shuffled))
-    pt = "HELLO WORLD"
-    ct = mono_encrypt(pt, key_map); dt = mono_decrypt(ct, key_map)
-    print(f"\n[Mono] Plaintext: {pt} -> Cipher: {ct} -> Decrypted: {dt}")
-    print(f"  Result: {'PASS' if dt == pt else 'FAIL'}")
-    pt2, key = "WEAREDISCOVERED", "DECEPTIVE"
-    ct2 = vigenere(pt2, key); dt2 = vigenere(ct2, key, decrypt=True)
-    print(f"\n[Vigenere] Plaintext: {pt2} Key: {key}")
-    print(f"  Encrypted: {ct2}\n  Decrypted: {dt2}")
-    print(f"  Result: {'PASS' if dt2 == pt2 else 'FAIL'}")
+emails     = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', sample)
+usernames  = [e.split('@')[0] for e in emails]
+domains    = [e.split('@')[1] for e in emails]
+hashtags   = re.findall(r'#\w+', sample)
+dates      = re.findall(r'\b\d{2}[-/]\d{2}[-/]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b', sample)
+phones     = re.findall(r'(?:\+\d{1,2}[-\s]?)?\(?\d{3}\)?[\s.-]?\d{4}[\s.-]?\d{4}', sample)
+tw_users   = re.findall(r'@\w+', sample)
 
-if __name__ == "__main__": main()
-# Practical 7: Playfair Cipher
-def make_matrix(key):
-    seen, matrix = set(), []
-    for c in (key+"ABCDEFGHIKLMNOPQRSTUVWXYZ"):
-        c = c.upper().replace("J","I")
-        if c.isalpha() and c not in seen: seen.add(c); matrix.append(c)
-    return [matrix[i*5:(i+1)*5] for i in range(5)]
+print("Email Addresses :", emails)
+print("Usernames       :", usernames)
+print("Domains         :", domains)
+print("Hashtags        :", hashtags)
+print("Dates           :", dates)
+print("Phone Numbers   :", phones)
+print("Twitter Handles :", tw_users)
 
-def find_pos(matrix, c):
-    for r,row in enumerate(matrix):
-        if c in row: return r, row.index(c)
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 3 : Most Common Words
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 3 : Most Common Words (excl. stop-words)"); print(SEP)
 
-def playfair_pair(matrix, a, b, enc=True):
-    r1,c1 = find_pos(matrix,a); r2,c2 = find_pos(matrix,b)
-    d = 1 if enc else -1
-    if r1==r2: return matrix[r1][(c1+d)%5]+matrix[r2][(c2+d)%5]
-    if c1==c2: return matrix[(r1+d)%5][c1]+matrix[(r2+d)%5][c2]
-    return matrix[r1][c2]+matrix[r2][c1]
+corpus = """
+Machine learning is a method of data analysis that automates analytical
+model building. It is based on the idea that systems can learn from data,
+identify patterns and make decisions with minimal human intervention.
+Deep learning is part of a broader family of machine learning methods
+based on artificial neural networks with representation learning.
+Natural language processing is a subfield of linguistics, computer science,
+and artificial intelligence concerned with the interactions between computers
+and human language, in particular how to program computers to process and
+analyze large amounts of natural language data.
+"""
 
-def prepare(text):
-    text = text.upper().replace("J","I").replace(" ","")
-    out = []
-    i = 0
-    while i < len(text):
-        a = text[i]; b = text[i+1] if i+1<len(text) else "X"
-        if a == b: b = "X"; i += 1
-        else: i += 2
-        out.append(a+b)
-    return out
+tokens3 = word_tokenize(corpus.lower())
+clean3  = [t for t in tokens3 if t.isalpha() and t not in sw]
+freq    = Counter(clean3).most_common(20)
 
-def playfair(text, key, enc=True):
-    m = make_matrix(key); pairs = prepare(text)
-    return "".join(playfair_pair(m, a, b, enc) for a,b in pairs)
+print(f"Corpus word count (raw): {len(tokens3)}")
+print(f"After cleaning:          {len(clean3)} content words\n")
+print(f"{'Rank':<5} {'Word':<20} {'Frequency':<10} {'Bar'}")
+print("-"*55)
+for rank,(word,count) in enumerate(freq,1):
+    bar = '#'*count
+    print(f"{rank:<5} {word:<20} {count:<10} {bar}")
 
-def main():
-    print("=== P7: Playfair Cipher ===")
-    pt, key = "INSTRUMENTS", "MONARCHY"
-    ct = playfair(pt, key); dt = playfair(ct, key, enc=False)
-    print(f"  Plaintext : {pt}\n  Key       : {key}")
-    print(f"  Encrypted : {ct}\n  Decrypted : {dt}")
-    print(f"  Result    : {'PASS' if dt.rstrip('X') == pt.replace('J','I') else 'FAIL'}")
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 4 : TF-IDF Matrix
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 4 : TF-IDF Matrix"); print(SEP)
 
-if __name__ == "__main__": main()
-# Practical 8: Hill Cipher
-import numpy as np
+docs = [
+    "machine learning algorithms build models from training data",
+    "deep learning uses neural networks for image and speech recognition",
+    "natural language processing analyzes and understands human text",
+    "information retrieval systems search and rank relevant documents",
+    "data science combines statistics programming and domain knowledge",
+]
+for i,d in enumerate(docs,1): print(f"  Doc {i}: {d}")
 
-def mod_inv_matrix(matrix, mod=26):
-    det = int(round(np.linalg.det(matrix))) % mod
-    def ext_gcd(a,b):
-        if b==0: return a,1,0
-        g,x,y = ext_gcd(b,a%b); return g,y,x-(a//b)*y
-    _,inv,_ = ext_gcd(det%mod, mod)
-    inv %= mod
-    n = matrix.shape[0]
-    adj = np.array([[(-1)**(i+j)*round(np.linalg.det(np.delete(np.delete(matrix,i,0),j,1)))
-                     for j in range(n)] for i in range(n)]).T % mod
-    return (inv * adj) % mod
+vec   = TfidfVectorizer(stop_words='english', max_features=12)
+mat   = vec.fit_transform(docs).toarray()
+terms = vec.get_feature_names_out()
 
-def hill(text, key_matrix, decrypt=False):
-    n = key_matrix.shape[0]
-    nums = [ord(c)-65 for c in text.upper() if c.isalpha()]
-    while len(nums)%n: nums.append(23)  # pad with X
-    K = mod_inv_matrix(key_matrix) if decrypt else key_matrix
-    result = []
-    for i in range(0, len(nums), n):
-        v = np.array(nums[i:i+n])
-        result.extend(int(x)%26 for x in K@v%26)
-    return "".join(chr(x+65) for x in result)
+print(f"\nTF-IDF Matrix  ({len(docs)} docs  x  {len(terms)} terms)\n")
+print(f"{'Term':<18}", end='')
+for i in range(len(docs)): print(f"{'Doc'+str(i+1):>8}", end='')
+print()
+print("-"*(18+len(docs)*8))
+for j,t in enumerate(terms):
+    print(f"{t:<18}", end='')
+    for i in range(len(docs)): print(f"{mat[i][j]:8.4f}", end='')
+    print()
 
-def main():
-    print("=== P8: Hill Cipher ===")
-    K = np.array([[3,3],[2,5]])
-    pt = "ACT"
-    ct = hill(pt, K); dt = hill(ct, K, decrypt=True)
-    print(f"  Plaintext : {pt}\n  Key Matrix: {K.tolist()}")
-    print(f"  Encrypted : {ct}\n  Decrypted : {dt}")
-    print(f"  Result    : {'PASS' if dt[:len(pt)] == pt else 'FAIL'}")
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 5 : Statistical Language Model
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 5 : Unigram & Bigram Language Model + Add-1 Smoothing"); print(SEP)
 
-if __name__ == "__main__": main()
-# Practical 9: Rail Fence Cipher
-def rail_encrypt(text, rails):
-    fence = [[] for _ in range(rails)]
-    r, d = 0, 1
-    for c in text:
-        fence[r].append(c)
-        if r==0: d=1
-        elif r==rails-1: d=-1
-        r+=d
-    return "".join(c for row in fence for c in row)
+lm_corpus = [
+    "the cat sat on the mat",
+    "the cat ate the rat",
+    "the dog sat on the log",
+    "a dog and a cat played in the park",
+]
 
-def rail_decrypt(ct, rails):
-    n = len(ct)
-    pattern = []
-    r, d = 0, 1
-    for i in range(n):
-        pattern.append(r)
-        if r==0: d=1
-        elif r==rails-1: d=-1
-        r+=d
-    idx = 0; pos = {}
-    for rail in range(rails):
-        for i,x in enumerate(pattern):
-            if x==rail: pos[i]=ct[idx]; idx+=1
-    return "".join(pos[i] for i in range(n))
+all_toks = []
+for s in lm_corpus: all_toks.extend(s.split())
 
-def main():
-    print("=== P9: Rail Fence Cipher ===")
-    pt, rails = "WEAREDISCOVEREDFLEEATONCE", 3
-    ct = rail_encrypt(pt, rails); dt = rail_decrypt(ct, rails)
-    print(f"  Plaintext : {pt}\n  Rails     : {rails}")
-    print(f"  Encrypted : {ct}\n  Decrypted : {dt}")
-    print(f"  Result    : {'PASS' if dt==pt else 'FAIL'}")
+V         = len(set(all_toks))  # vocabulary size
+N         = len(all_toks)
+uni_freq  = Counter(all_toks)
+bi_freq   = Counter(zip(all_toks, all_toks[1:]))
 
-if __name__ == "__main__": main()
-# Practical 10: Row (Columnar) Transposition Cipher
-def row_encrypt(text, key):
-    text = text.upper().replace(" ","")
-    n = len(key)
-    padded = text.ljust(-(-len(text)//n)*n, "X")
-    grid = [list(padded[i:i+n]) for i in range(0, len(padded), n)]
-    order = sorted(range(n), key=lambda i: key[i])
-    return "".join(grid[r][c] for c in order for r in range(len(grid)))
+def p_unigram(w):       return (uni_freq[w]+1)/(N+V)
+def p_bigram(w2,w1):    return (bi_freq[(w1,w2)]+1)/(uni_freq[w1]+V)
 
-def row_decrypt(ct, key):
-    n = len(key); rows = len(ct)//n
-    order = sorted(range(n), key=lambda i: key[i])
-    cols = {}
-    idx = 0
-    for c in order: cols[c]=list(ct[idx:idx+rows]); idx+=rows
-    return "".join(cols[c][r] for r in range(rows) for c in range(n)).rstrip("X")
+print(f"Corpus : {lm_corpus}")
+print(f"Tokens : {N}  |  Vocabulary : {V}\n")
 
-def main():
-    print("=== P10: Row Transposition Cipher ===")
-    pt, key = "ATTACK POSTPONED UNTIL TWO AM", [4,3,1,2,5,6,7]
-    ct = row_encrypt(pt, key); dt = row_decrypt(ct, key)
-    print(f"  Plaintext : {pt}\n  Key       : {key}")
-    print(f"  Encrypted : {ct}\n  Decrypted : {dt}")
-    print(f"  Result    : {'PASS' if dt == pt.upper().replace(' ','') else 'FAIL'}")
+show_words = ['cat','dog','sat','rat','mat','played']
+print(f"{'Word':<12} {'Count':>6}  {'P(w) smoothed':>16}")
+print("-"*38)
+for w in show_words:
+    print(f"{w:<12} {uni_freq[w]:>6}  {p_unigram(w):>16.6f}")
 
-if __name__ == "__main__": main()
-# Practical 11: Product Cipher (Caesar + Row Transposition)
-def caesar(text, shift):
-    return "".join(chr((ord(c)-65+shift)%26+65) if c.isalpha() else c for c in text.upper())
+print(f"\n{'Bigram':<18} {'Count':>6}  {'P(w2|w1) smoothed':>20}")
+print("-"*48)
+show_bigrams = [('cat','the'),('sat','cat'),('dog','the'),('log','on'),('park','the')]
+for (w2,w1) in show_bigrams:
+    print(f"P({w2}|{w1}):{'':<6} {bi_freq[(w1,w2)]:>3}  {p_bigram(w2,w1):>20.6f}")
 
-def row_enc(text, key):
-    text = text.replace(" ",""); n = len(key)
-    padded = text.ljust(-(-len(text)//n)*n, "X")
-    grid = [list(padded[i:i+n]) for i in range(0, len(padded), n)]
-    order = sorted(range(n), key=lambda i: key[i])
-    return "".join(grid[r][c] for c in order for r in range(len(grid)))
+test_sents = ["the cat sat on the mat", "the dog ate the rat", "a cat played in park"]
+print("\nSentence Log-Probabilities (bigram, add-1 smoothing):")
+for s in test_sents:
+    wds  = s.split()
+    logp = math.log(p_unigram(wds[0]))
+    for i in range(1,len(wds)): logp += math.log(p_bigram(wds[i],wds[i-1]))
+    print(f"  '{s}'  =>  log P = {logp:.4f}")
 
-def row_dec(ct, key):
-    n = len(key); rows = len(ct)//n
-    order = sorted(range(n), key=lambda i: key[i])
-    cols = {}; idx = 0
-    for c in order: cols[c]=list(ct[idx:idx+rows]); idx+=rows
-    return "".join(cols[c][r] for r in range(rows) for c in range(n)).rstrip("X")
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 6 : POS Tagging
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 6 : POS Tagging, Noun Extraction, POS Frequency"); print(SEP)
 
-def product_enc(text, shift, key): return row_enc(caesar(text, shift), key)
-def product_dec(text, shift, key): return caesar(row_dec(text, key), -shift)
+news = ("The Prime Minister of India announced a new artificial intelligence "
+        "policy on Monday. Scientists and engineers across universities will "
+        "collaborate on research projects funded by the government. The initiative "
+        "aims to develop advanced algorithms for healthcare, agriculture, and education.")
 
-def main():
-    print("=== P11: Product Cipher ===")
-    pt, shift, key = "HELLO WORLD", 3, [2,1,3]
-    ct = product_enc(pt, shift, key); dt = product_dec(ct, shift, key)
-    print(f"  Plaintext : {pt}\n  Caesar({shift}) : {caesar(pt, shift)}")
-    print(f"  Encrypted : {ct}\n  Decrypted : {dt}")
-    print(f"  Result    : {'PASS' if dt.replace('X','') == pt.upper().replace(' ','') else 'FAIL'}")
-    print("\n  [Note] DES/AES are product ciphers: S-boxes (substitution) + P-boxes (permutation) repeated in rounds.")
+toks6   = word_tokenize(news)
+tagged  = pos_tag(toks6)
+print("POS Tagged Text (first 20 tokens):")
+for tok,tag in tagged[:20]:
+    print(f"  {tok:<20} {tag}")
 
-if __name__ == "__main__": main()
+nouns = [w for w,t in tagged if t in ('NN','NNS','NNP','NNPS')]
+print(f"\nNouns extracted ({len(nouns)}): {nouns}")
+
+pos_freq = Counter(t for _,t in tagged)
+print("\nPOS Frequency Dictionary:")
+for tag,cnt in sorted(pos_freq.items(), key=lambda x:-x[1]):
+    print(f"  {tag:<8} : {cnt}")
+
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 7 : Named Entity Recognition (NER)
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 7 : Named Entity Recognition (NER)"); print(SEP)
+
+headlines = [
+    "Apple Inc CEO Tim Cook announced new iPhone models in San Francisco.",
+    "Narendra Modi met Joe Biden at the White House in Washington D.C.",
+    "Google and Microsoft are investing heavily in artificial intelligence.",
+    "The United Nations held a climate summit in New York last Friday.",
+    "Elon Musk's SpaceX launched a new satellite from Cape Canaveral.",
+]
+
+print("News Headlines:")
+for h in headlines: print(f"  - {h}")
+print("\nNamed Entities:")
+
+entity_counter = Counter()
+for hl in headlines:
+    toks7  = word_tokenize(hl)
+    tagged7= pos_tag(toks7)
+    tree   = ne_chunk(tagged7, binary=False)
+    for subtree in tree:
+        if isinstance(subtree, Tree):
+            entity = " ".join(w for w,t in subtree.leaves())
+            label  = subtree.label()
+            entity_counter[label] += 1
+            print(f"  [{label:<12}]  {entity}")
+
+print("\nEntity Type Frequency:")
+for etype, cnt in entity_counter.most_common():
+    print(f"  {etype:<12} : {cnt}")
+
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 8 : Movie Review Sentiment Classification (IMDB / NLTK)
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 8 : Movie Review Sentiment Classification"); print(SEP)
+print("Dataset: NLTK movie_reviews corpus (2000 reviews: 1000 pos / 1000 neg)")
+
+try:
+    fileids = movie_reviews.fileids()
+    data8   = [(movie_reviews.raw(fid), cat)
+               for cat in movie_reviews.categories()
+               for fid in movie_reviews.fileids(cat)]
+    random.seed(42); random.shuffle(data8)
+    texts8,labels8 = zip(*data8)
+
+    X_tr,X_te,y_tr,y_te = train_test_split(texts8, labels8, test_size=0.2, random_state=42)
+
+    pipe = Pipeline([
+        ('tfidf', TfidfVectorizer(stop_words='english', max_features=8000, ngram_range=(1,2))),
+        ('clf',   LogisticRegression(max_iter=1000, random_state=42)),
+    ])
+    pipe.fit(X_tr, y_tr)
+    y_pred = pipe.predict(X_te)
+    acc    = accuracy_score(y_te, y_pred)
+
+    print(f"\nTraining samples : {len(X_tr)}  |  Test samples : {len(X_te)}")
+    print(f"Model            : Logistic Regression (TF-IDF features, bigrams)")
+    print(f"Test Accuracy    : {acc*100:.2f}%\n")
+    print(classification_report(y_te, y_pred))
+
+    custom = [
+        "An absolutely brilliant film with a gripping storyline and great acting.",
+        "Terrible movie, complete waste of time. The plot made no sense at all.",
+        "A decent film overall, though a bit slow in the middle sections.",
+        "One of the best movies I have ever seen! Masterpiece of cinema.",
+    ]
+    preds = pipe.predict(custom)
+    print("Custom Review Predictions:")
+    for rev,pred in zip(custom,preds):
+        print(f"  [{pred.upper():3}]  {rev[:60]}...")
+except Exception as e:
+    print(f"NLTK movie_reviews not available: {e}")
+    print("Using a small custom dataset for demonstration...")
+    # Fallback: small custom dataset
+    pos = ["great movie","loved it","brilliant acting","masterpiece cinema","excellent film","wonderful story"]
+    neg = ["terrible film","waste of time","awful acting","boring plot","horrible movie","worst film ever"]
+    texts8  = pos+neg
+    labels8 = ['pos']*6+['neg']*6
+    X_tr,X_te,y_tr,y_te = train_test_split(texts8, labels8, test_size=0.33, random_state=42)
+    pipe = Pipeline([('cv',CountVectorizer()),('nb',MultinomialNB())])
+    pipe.fit(X_tr,y_tr); y_pred=pipe.predict(X_te)
+    print(f"Accuracy: {accuracy_score(y_te,y_pred)*100:.1f}%")
+    print(classification_report(y_te,y_pred))
+
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 9 : Text Classifier (sklearn Pipeline)
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 9 : Text Classifier (Multi-class, sklearn)"); print(SEP)
+
+sports_data = [
+    ("The team scored a hat-trick in the final football match.", "sports"),
+    ("Manchester United won the Premier League title this season.", "sports"),
+    ("The cricket team won the test series against Australia.", "sports"),
+    ("Virat Kohli hit a century in the third ODI match today.", "sports"),
+    ("The NBA finals concluded with the Lakers winning game seven.", "sports"),
+    ("Scientists discovered a new exoplanet in the Milky Way galaxy.", "science"),
+    ("NASA launched the Artemis mission to orbit the moon successfully.", "science"),
+    ("Researchers developed a new vaccine effective against influenza.", "science"),
+    ("A breakthrough in quantum computing was achieved at MIT labs.", "science"),
+    ("CRISPR gene editing technology advances cancer treatment research.", "science"),
+    ("The stock market crashed amid fears of global economic recession.", "politics"),
+    ("Parliament passed the new education reform bill after debate.", "politics"),
+    ("The president signed an executive order on climate change policy.", "politics"),
+    ("Elections were held in five states with high voter turnout today.", "politics"),
+    ("The government announced a new budget for infrastructure spending.", "politics"),
+    ("A new AI model surpasses human performance on language tasks.", "technology"),
+    ("Apple unveiled its latest M-series chip at the WWDC conference.", "technology"),
+    ("OpenAI released GPT-4 with advanced multimodal capabilities.", "technology"),
+    ("Google DeepMind achieved a breakthrough in protein structure prediction.", "technology"),
+    ("SpaceX Starship completed its third integrated flight test.", "technology"),
+]
+
+texts9, labels9 = zip(*sports_data)
+X_tr9,X_te9,y_tr9,y_te9 = train_test_split(texts9,labels9,test_size=0.25,random_state=42,stratify=labels9)
+
+pipe9 = Pipeline([
+    ('tfidf', TfidfVectorizer(ngram_range=(1,2), min_df=1)),
+    ('clf',   LinearSVC(max_iter=2000, random_state=42)),
+])
+pipe9.fit(X_tr9,y_tr9)
+y_pred9 = pipe9.predict(X_te9)
+
+print(f"Classes   : {sorted(set(labels9))}")
+print(f"Train     : {len(X_tr9)} samples  |  Test : {len(X_te9)} samples")
+print(f"Accuracy  : {accuracy_score(y_te9,y_pred9)*100:.1f}%\n")
+print(classification_report(y_te9, y_pred9))
+
+test9 = [
+    "Rohit Sharma led India to victory in the T20 World Cup.",
+    "The government will announce a new space exploration policy.",
+    "Samsung released the Galaxy S25 with new camera features.",
+]
+preds9 = pipe9.predict(test9)
+print("New Sample Predictions:")
+for s,p in zip(test9,preds9):
+    print(f"  [{p.upper():<10}]  {s}")
+
+# ─────────────────────────────────────────────────────────────────
+# PRACTICAL 10 : Character-based Language Model
+# ─────────────────────────────────────────────────────────────────
+print("\n"+SEP); print("PRACTICAL 10 : Character-based Language Model (N-gram)"); print(SEP)
+
+shakespeare = (
+    "to be or not to be that is the question whether tis nobler in the mind "
+    "to suffer the slings and arrows of outrageous fortune or to take arms "
+    "against a sea of troubles and by opposing end them to die to sleep no "
+    "more and by a sleep to say we end the heartache and the thousand natural "
+    "shocks that flesh is heir to tis a consummation devoutly to be wished "
+    "to die to sleep to sleep perchance to dream ay there is the rub for in "
+    "that sleep of death what dreams may come when we have shuffled off this "
+    "mortal coil must give us pause there is the respect that makes calamity "
+    "of so long life for who would bear the whips and scorns of time "
+)
+
+print(f"Corpus: Shakespeare excerpt ({len(shakespeare)} characters)\n")
+
+N_GRAM = 4
+
+# Build n-gram model
+model = defaultdict(Counter)
+for i in range(len(shakespeare) - N_GRAM):
+    ctx  = shakespeare[i:i+N_GRAM]
+    nxt  = shakespeare[i+N_GRAM]
+    model[ctx][nxt] += 1
+
+vocab = sorted(set(shakespeare))
+print(f"Vocabulary ({len(vocab)} unique chars): {repr(''.join(vocab))}")
+print(f"N-gram order: {N_GRAM}")
+print(f"Unique {N_GRAM}-gram contexts: {len(model)}\n")
+
+def predict_next_char(ctx):
+    ctx = ctx[-N_GRAM:]
+    if ctx in model:
+        return max(model[ctx], key=model[ctx].get)
+    return ' '
+
+# Show top contexts
+print("Top 8 contexts and their most likely next character:")
+top_ctx = sorted(model.items(), key=lambda x: -sum(x[1].values()))[:8]
+for ctx, ctr in top_ctx:
+    best = max(ctr, key=ctr.get)
+    print(f"  '{ctx}'  =>  next: '{best}'  (top-3: {dict(ctr.most_common(3))})")
+
+# Generate text
+def generate_text(seed, length=80):
+    text = seed
+    for _ in range(length):
+        text += predict_next_char(text)
+    return text
+
+seeds = ["to b", "the ", "slee", "drea"]
+print("\nGenerated Text Samples:")
+for seed in seeds:
+    gen = generate_text(seed, 70)
+    print(f"  Seed '{seed}': {gen}")
+
+# Character-level prediction accuracy on corpus
+correct = sum(predict_next_char(shakespeare[i:i+N_GRAM]) == shakespeare[i+N_GRAM]
+              for i in range(len(shakespeare)-N_GRAM))
+total   = len(shakespeare) - N_GRAM
+print(f"\nCharacter Prediction Accuracy ({N_GRAM}-gram): {correct}/{total} = {correct/total*100:.1f}%")
+
+print("\n" + SEP)
+print("All 10 NLP Practicals Completed Successfully.")
+print(SEP)
